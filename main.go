@@ -31,12 +31,12 @@ func main() {
 	client := &http.Client{}
 
 	emotesByCode := make(map[string]Emote)
-	for _, emote := range getGlobalImages(client) {
+	for _, emote := range getGlobalEmotes(client) {
 		emotesByCode[emote.Code] = emote
 	}
 
-	for i := 0; i < 10; i++ {
-		for _, emote := range getTopImages(client, i*100) {
+	for i := 0; i < 25; i++ {
+		for _, emote := range getTrendingEmotes(client, i*100) {
 			if _, ok := emotesByCode[emote.Code]; !ok {
 				emotesByCode[emote.Code] = emote
 			}
@@ -66,7 +66,7 @@ func main() {
 	<-sc
 }
 
-func getGlobalImages(client *http.Client) []Emote {
+func getGlobalEmotes(client *http.Client) []Emote {
 	url := "https://api.betterttv.net/3/cached/emotes/global"
 
 	resp, err := client.Get(url)
@@ -84,12 +84,12 @@ func getGlobalImages(client *http.Client) []Emote {
 	return result
 }
 
-type TopEmote struct {
+type TrendingEmote struct {
 	Emote Emote `json:"emote"`
 }
 
-func getTopImages(client *http.Client, offset int) []Emote {
-	url := "https://api.betterttv.net/3/emotes/shared/top?limit=100&offset=" + fmt.Sprint(offset)
+func getTrendingEmotes(client *http.Client, offset int) []Emote {
+	url := "https://api.betterttv.net/3/emotes/shared/trending?limit=100&offset=" + fmt.Sprint(offset)
 
 	resp, err := client.Get(url)
 	if err != nil {
@@ -97,15 +97,15 @@ func getTopImages(client *http.Client, offset int) []Emote {
 	}
 	defer resp.Body.Close()
 
-	result := []TopEmote{}
+	result := []TrendingEmote{}
 	err = json.NewDecoder(resp.Body).Decode(&result)
 	if err != nil {
 		panic(err)
 	}
 
 	emotes := []Emote{}
-	for _, topEmote := range result {
-		emotes = append(emotes, topEmote.Emote)
+	for _, trendingEmote := range result {
+		emotes = append(emotes, trendingEmote.Emote)
 	}
 
 	return emotes
