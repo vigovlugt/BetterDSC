@@ -54,10 +54,10 @@ func getDefaultEmotes() map[string]Emote {
 
 	for i := 0; i < 25; i++ {
 		wg.Add(1)
-		go func() {
+		go func(i int) {
 			getTrendingEmotes(client, i*100, emotesChannel)
 			wg.Done()
-		}()
+		}(i)
 	}
 
 	wg.Wait()
