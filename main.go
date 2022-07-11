@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 
 	"github.com/bwmarrin/discordgo"
@@ -19,29 +20,51 @@ type Emote struct {
 	ID        string `json:"id"`
 	Code      string `json:"code"`
 	ImageType string `json:"imageType"`
+	Order     int
 }
 
-func main() {
-	godotenv.Load()
-
-	token := os.Getenv("DISCORD_BOT_TOKEN")
-
-	fmt.Println("Getting emote data")
-
+func getDefaultEmotes() map[string]Emote {
 	client := &http.Client{}
 
+	emotesChannel := make(chan []Emote, 26)
+	wg := new(sync.WaitGroup)
+
 	emotesByCode := make(map[string]Emote)
-	for _, emote := range getGlobalEmotes(client) {
-		emotesByCode[emote.Code] = emote
-	}
+	wg.Add(1)
+	go func() {
+		getGlobalEmotes(client, emotesChannel)
+		wg.Done()
+	}()
 
 	for i := 0; i < 25; i++ {
-		for _, emote := range getTrendingEmotes(client, i*100) {
-			if _, ok := emotesByCode[emote.Code]; !ok {
+		wg.Add(1)
+		go func() {
+			getTrendingEmotes(client, i*100, emotesChannel)
+			wg.Done()
+		}()
+	}
+
+	wg.Wait()
+	close(emotesChannel)
+
+	for result := range emotesChannel {
+		for _, emote := range result {
+			existingEmote, existsEmote := emotesByCode[emote.Code]
+			if !existsEmote || existingEmote.Order < emote.Order {
 				emotesByCode[emote.Code] = emote
 			}
 		}
 	}
+
+	return emotesByCode
+}
+
+func main() {
+	godotenv.Load()
+	token := os.Getenv("DISCORD_BOT_TOKEN")
+
+	fmt.Println("Getting emote data")
+	emoteByCode := getDefaultEmotes()
 
 	fmt.Println("Starting bot")
 	discord, err := discordgo.New("Bot " + token)
@@ -49,7 +72,7 @@ func main() {
 		panic(err)
 	}
 
-	discord.AddHandler(func(s *discordgo.Session, m *discordgo.MessageCreate) { onMessageCreate(emotesByCode, s, m) })
+	discord.AddHandler(func(s *discordgo.Session, m *discordgo.MessageCreate) { onMessageCreate(emoteByCode, s, m) })
 	discord.Identify.Intents = discordgo.IntentsGuildMessages
 
 	// Setup connection
@@ -66,7 +89,7 @@ func main() {
 	<-sc
 }
 
-func getGlobalEmotes(client *http.Client) []Emote {
+func getGlobalEmotes(client *http.Client, c chan []Emote) {
 	url := "https://api.betterttv.net/3/cached/emotes/global"
 
 	resp, err := client.Get(url)
@@ -81,14 +104,18 @@ func getGlobalEmotes(client *http.Client) []Emote {
 		panic(err)
 	}
 
-	return result
+	for _, emote := range result {
+		emote.Order = -1
+	}
+
+	c <- result
 }
 
 type TrendingEmote struct {
 	Emote Emote `json:"emote"`
 }
 
-func getTrendingEmotes(client *http.Client, offset int) []Emote {
+func getTrendingEmotes(client *http.Client, offset int, c chan []Emote) {
 	url := "https://api.betterttv.net/3/emotes/shared/trending?limit=100&offset=" + fmt.Sprint(offset)
 
 	resp, err := client.Get(url)
@@ -105,10 +132,11 @@ func getTrendingEmotes(client *http.Client, offset int) []Emote {
 
 	emotes := []Emote{}
 	for _, trendingEmote := range result {
+		trendingEmote.Emote.Order = offset
 		emotes = append(emotes, trendingEmote.Emote)
 	}
 
-	return emotes
+	c <- emotes
 }
 
 func onMessageCreate(emotesByCode map[string]Emote, s *discordgo.Session, m *discordgo.MessageCreate) {
