@@ -1,14 +1,19 @@
-FROM golang:1.18-alpine
+FROM golang:1.18 AS build
 
 WORKDIR /app
 
-COPY go.mod ./
-COPY go.sum ./
-
+COPY go.mod go.sum ./
 RUN go mod download
 
-COPY *.go ./
+COPY . ./
 
 RUN go build
 
-CMD ["./betterdsc"]
+FROM gcr.io/distroless/base-debian10 as runtime
+
+WORKDIR /
+
+COPY --from=build /app/betterdsc /betterdsc
+
+
+ENTRYPOINT ["./betterdsc"]

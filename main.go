@@ -1,8 +1,5 @@
 package main
 
-// https://api.betterttv.net/3/emotes/shared/top?offset=740&limit=50
-
-// [{"id":"54fa8f1401e468494b85b537","code":":tf:","imageType":"png","userId":"5561169bd6b9d206222a8c19"},{"id":"54fa8fce01e468494b85b53c","code":"CiGrip","imageType":"png","userId":"5561169bd6b9d206222a8c19"},
 import (
 	"betterdsc/ent"
 	"betterdsc/ent/serveremote"
